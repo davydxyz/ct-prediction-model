@@ -1,0 +1,18 @@
+Package: citbiclean
+Type: Package
+Title: Data Cleaning for Clinically-Important Traumatic Brain Injury Dataset
+Version: 0.1.0
+Author: Yizhou Xu
+Maintainer: Yizhou Xu <davyd@berkeley.edu>
+Description: This package provides functions to clean and prepare the ciTBI
+    dataset for modeling. It includes the raw dataset and cleaning functions
+    with proper documentation.
+License: MIT
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.3
+Imports:
+    dplyr,
+    tidyr
+Depends:
+    R (>= 3.5.0)

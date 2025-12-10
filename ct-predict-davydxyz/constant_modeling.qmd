@@ -1,0 +1,69 @@
+---
+format: typst
+---
+
+### Part Two
+```{r}
+#load packages and data
+
+library(citbiclean)
+library(dplyr)
+
+data <- clean_citbi() #the cleaned data
+
+## Model 1: Predict No ciTBI for Eveyone
+
+no_citbi <- function(data) {
+    predictions <- rep("No", nrow(data))
+    return (predictions)
+}
+
+# Drawback: everyone gets no ciTBI, which is arbitrary and loose accuracy
+
+
+
+## Model 2:
+
+yes_citbi <- function (data) {
+    predictions <- rep("Yes", nrow(data))
+    return (predictions)
+}
+
+# Similarly, returning yes everytime is arbitrary and loose accuracy
+```
+
+### Part Three
+```{r}
+# load the prediction data and actual data
+pred_no <- no_citbi(data)
+pred_yes <- yes_citbi(data)
+actual <- data$citbi
+
+# Matrix Build:
+
+TP_no <- sum(pred_no == "Yes" & actual == "Yes")
+TN_no <- sum(pred_no == "No" & actual == "No")
+FP_no <- sum(pred_no == "Yes" & actual == "No")
+FN_no <- sum(pred_no == "No" & actual == "Yes")
+
+TP_yes <- sum(pred_yes == "Yes" & actual == "Yes")
+TN_yes <- sum(pred_yes == "No" & actual == "No")
+FP_yes <- sum(pred_yes == "Yes" & actual == "No")
+FN_yes <- sum(pred_yes == "No" & actual == "Yes")
+
+# Metrics
+accuracy_no <- (TP_no + TN_no) / length(actual)
+prec_no <- if (TP_no + FP_no > 0) TP_no / (TP_no + FP_no) else NA
+rec_no <- if (TP_no + FN_no > 0) TP_no / (TP_no + FN_no) else NA
+
+accuracy_yes <- (TP_yes + TN_yes) / length(actual)
+prec_yes <- if (TP_yes + FP_yes > 0) TP_yes / (TP_yes + FP_yes) else NA
+rec_yes <- if (TP_yes + FN_yes > 0) TP_yes / (TP_yes + FN_yes) else NA
+
+
+data.frame(
+    Metric = c("Accuracy", "Precision", "Recall"),
+    no_citbi_model = round(c(accuracy_no, prec_no, rec_no), 4),
+    yes_citbi_model = round(c(accuracy_yes, prec_yes, rec_yes), 4)
+)
+```

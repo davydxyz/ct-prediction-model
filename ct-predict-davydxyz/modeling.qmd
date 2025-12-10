@@ -1,0 +1,260 @@
+---
+format: typst
+---
+
+### Part Four
+```{r}
+# load the library and data
+library(citbiclean)
+library(tidymodels)
+library(dplyr)
+
+# Get clean data
+data <- clean_citbi()
+
+# Only keep rows where our 5 predictors and target are complete
+data <- data |>
+  filter(
+    !is.na(AgeInMonth),
+    !is.na(Gender),
+    !is.na(GCSTotal),
+    !is.na(Vomit),
+    !is.na(AMS),
+    !is.na(citbi)
+  )
+
+# Check how many rows we have
+cat("Total rows after filtering:", nrow(data), "\n")
+cat("ciTBI distribution:\n")
+print(table(data$citbi)) 
+
+# See the first few rows
+head(data)
+
+# See column names
+names(data)
+
+# See structure
+str(data)
+
+# See just a few key columns
+data |>
+  select(citbi, AgeInMonth, Gender, GCSTotal, Vomit, AMS) %>%
+  head(10)
+```
+
+
+```{r}
+set.seed(123)
+
+# Split data: 80% for training and 20% for testing
+data_split <- initial_split(data, prop = 0.8, strata = citbi)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+# Create a recipe
+citbi_recipie <- 
+    recipe(citbi ~ AgeInMonth + Gender+ GCSTotal + Vomit + AMS, data = train_data) |>
+    step_zv(all_predictors()) |>
+    step_normalize(all_numeric_predictors())
+
+# 1. Logistic Model (tidymodels automatically converts catagorical variables to dummy variables!)
+logistic_spec <- logistic_reg() |>
+    set_engine("glm") |>          # glm for Generalized Linear Model
+    set_mode("classification")  # classify between yes or no
+
+logistic_workflow <- workflow() |>
+    add_recipe(citbi_recipie) |>
+    add_model(logistic_spec)
+
+logistic_fit <- logistic_workflow |>
+    fit(data = train_data)
+
+# yardstick
+logistic_results <- test_data |>
+    bind_cols(
+        predict(logistic_fit, new_data = test_data, type = "class")
+    )
+
+# 2. KNN Model
+knn_spec <- nearest_neighbor(neighbors = 5) |>
+    set_engine("kknn") |>
+    set_mode("classification")
+
+knn_workflow <- workflow() |>
+    add_recipe(citbi_recipie) |>
+    add_model(knn_spec)
+
+knn_fit <- knn_workflow |>
+    fit(data = train_data)
+
+knn_results <- test_data |>
+  bind_cols(
+    predict(knn_fit, new_data = test_data, type = "class")
+  )
+
+# Calculate Accuracy, Precision, Recall, and F scores
+
+# Accuracy
+logistic_results |> 
+    accuracy(truth = citbi, estimate = .pred_class)
+
+# Precision
+logistic_results |>
+    precision(truth = citbi, estimate = .pred_class)
+
+# Recall
+logistic_results |>
+  recall(truth = citbi, estimate = .pred_class)
+
+# F1 score
+logistic_results |>
+  f_meas(truth = citbi, estimate = .pred_class, beta = 1)
+
+# F0.5 score
+logistic_results |>
+  f_meas(truth = citbi, estimate = .pred_class, beta = 0.5)
+
+# F2 score
+logistic_results |>
+  f_meas(truth = citbi, estimate = .pred_class, beta = 2)
+
+logistic_metrics <- metric_set(accuracy, precision, recall, f_meas)
+logistic_all <- logistic_results |>
+    logistic_metrics(truth = citbi, estimate = .pred_class)
+
+print(logistic_all)
+
+```
+
+
+```{r}
+# KNN Model Evaluation
+
+# Accuracy
+knn_results |>
+    accuracy(truth = citbi, estimate = .pred_class)
+
+# Precision
+knn_results |>
+    precision(truth = citbi, estimate = .pred_class)
+
+# Recall
+knn_results |>
+  recall(truth = citbi, estimate = .pred_class)
+
+# F1 score
+knn_results |>
+  f_meas(truth = citbi, estimate = .pred_class, beta = 1)
+
+# F0.5 score
+knn_results |>
+  f_meas(truth = citbi, estimate = .pred_class, beta = 0.5)
+
+# F2 score
+knn_results |>
+  f_meas(truth = citbi, estimate = .pred_class, beta = 2)
+
+knn_metrics <- metric_set(accuracy, precision, recall, f_meas)
+knn_all <- knn_results |>
+    knn_metrics(truth = citbi, estimate = .pred_class)
+
+print(knn_all)
+
+```
+
+```{r}
+table(logistic_results$.pred_class)
+table(knn_results$.pred_class)
+```
+
+### Part Five
+
+```{r}
+logistic_all_metrics <- bind_rows(
+  logistic_results |> accuracy(truth = citbi, estimate = .pred_class) |> mutate(model = "Logistic"),
+  logistic_results |> precision(truth = citbi, estimate = .pred_class) |> mutate(model = "Logistic"),
+  logistic_results |> recall(truth = citbi, estimate = .pred_class) |> mutate(model = "Logistic"),
+  logistic_results |> f_meas(truth = citbi, estimate = .pred_class, beta = 1) |> mutate(model = "Logistic"),
+  logistic_results |> f_meas(truth = citbi, estimate = .pred_class, beta = 0.5) |> mutate(model = "Logistic", .metric = "f_meas_0.5"),
+  logistic_results |> f_meas(truth = citbi, estimate = .pred_class, beta = 2) |> mutate(model = "Logistic", .metric = "f_meas_2")
+)
+
+knn_all_metrics <- bind_rows(
+  knn_results |> accuracy(truth = citbi, estimate = .pred_class) |> mutate(model = "KNN"),
+  knn_results |> precision(truth = citbi, estimate = .pred_class) |> mutate(model = "KNN"),
+  knn_results |> recall(truth = citbi, estimate = .pred_class) |> mutate(model = "KNN"),
+  knn_results |> f_meas(truth = citbi, estimate = .pred_class, beta = 1) |> mutate(model = "KNN"),
+  knn_results |> f_meas(truth = citbi, estimate = .pred_class, beta = 0.5) |> mutate(model = "KNN", .metric = "f_meas_0.5"),
+  knn_results |> f_meas(truth = citbi, estimate = .pred_class, beta = 2) |> mutate(model = "KNN", .metric = "f_meas_2")
+)
+
+comparison <- bind_rows(logistic_all_metrics, knn_all_metrics) |>
+  select(model, .metric, .estimate) |>
+  pivot_wider(names_from = model, values_from = .estimate)
+
+print(comparison)
+
+logistic_cm <- logistic_results |>
+  conf_mat(truth = citbi, estimate = .pred_class)
+
+knn_cm <- knn_results |>
+  conf_mat(truth = citbi, estimate = .pred_class)
+
+cat("\nLogistic Regression Confusion Matrix:\n")
+print(logistic_cm)
+
+cat("\nKNN Confusion Matrix:\n")
+print(knn_cm)
+```
+
+Taking a look at recall for the Logistic and KNN models, we can see that the Logistic Model has a really high recall score. This means that there're almost no missed brain injuries (False Negatives). I believe this is the most important because False Negative can cause patient lose their life. Also Logistic Model is more accurate.
+
+### Part Six: Hyperparameter
+
+```{r}
+# I choose to hyperparameter the KNN model to find the best k
+
+knn_tune_spec <- nearest_neighbor(neighbors = tune()) |>
+    set_engine("kknn") |>
+    set_mode("classification")
+
+set.seed(456)
+cv_folds <- vfold_cv(train_data, v = 5, strata = citbi) # Create v=5 folds. Stratification ensures that in every fold, number of citbi yes and no are approximately the same
+
+
+# Create workflow with the tunable model
+knn_tune_workflow <- workflow() |>
+    add_recipe(citbi_recipie) |>
+    add_model(knn_tune_spec)
+
+# Define a grid for k values to test
+k_grid <- tibble(neighbors = c(1, 3, 5, 7, 9, 11, 15, 20, 25, 30))
+
+# Tune the model using tune_grid(), runs the models
+knn_tuning <- knn_tune_workflow |>
+    tune_grid(
+        resamples = cv_folds,
+        grid = k_grid,
+        metrics = metric_set(recall, precision, f_meas)
+    )
+
+knn_tuning |> collect_metrics()
+knn_tuning |> autoplot()
+
+# Picks the best k here
+best_k <- knn_tuning |> select_best(metric = "recall") # we choose the metric to be the highest mean recall value to minimize False Negative
+print(best_k)
+
+# Train final model below
+final_knn_workflow <- knn_tune_workflow |> finalize_workflow(best_k)
+final_knn_fit <- final_knn_workflow |> fit(data = train_data)
+
+final_knn_results <- test_data |>
+    bind_cols(predict(final_knn_fit, new_data = test_data, type = "class"))
+
+final_knn_results |> recall(truth = citbi, estimate = .pred_class)
+
+```
+
+Eventually, we found that k = 20 yields the best recall value. So after tuning, k = 20 is the best for the knn modeling.
